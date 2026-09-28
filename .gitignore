@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+tracking/simulation_output/
+ai_training/dataset/
+ai_training/output_paddlex/
+*.pdparams
+*.pdopt
+*.onnx
+.obsidian/
