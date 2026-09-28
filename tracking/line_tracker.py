@@ -77,15 +77,12 @@ Fit_Half_Window = 60        # 前视行上下局部拟合半窗口（480像素�
 Min_Fit_Span = 30           # 有效点必须覆盖足够高度
 Max_Fit_RMSE = 12           # 拟合误差过大时按丢线处理
 
-#============================================================================================
-
 #============================硬件初始化======================================
-cap = cv2.VideoCapture(0)
-#摄像头初始化
+cap = cv2.VideoCapture(0)       #摄像头初始化
 
 #====================================================函数分装=========================================================
 
-# 修改：逐行选择连续暗色路面，使用上一行中点引导搜索。
+# 逐行选择连续暗色路面，使用上一行中点引导搜索。
 # 边界必须在画面内可见；单侧出画面时不以画面边缘伪造边界。
 def Find_Center(Ima_Bin, Seed_X=None):
     height, width = Ima_Bin.shape
@@ -118,7 +115,7 @@ def Find_Center(Ima_Bin, Seed_X=None):
                     continue
             candidates.append((distance, center, road_width))
         candidates.sort()
-        # 修改：岔路等出现两个同样合理的候选时，不武断选择方向。
+        #岔路等出现两个同样合理的候选时，不武断选择方向。
         if (not candidates or (len(candidates) > 1
                 and candidates[1][0] - candidates[0][0] < Ambiguity_Margin * scale)):
             missing += 1
@@ -132,7 +129,7 @@ def Find_Center(Ima_Bin, Seed_X=None):
     return xs, ys
 
 
-# 修改：仅拟合前视位置附近的道路，避免用一条直线强行表示整个弯道。
+# 仅拟合前视位置附近的道路，避免用一条直线强行表示整个弯道。
 def Center_Line(Center_ys, Center_xs, Target_Y, Frame_Height):
     ys = np.asarray(Center_ys, dtype=float)
     xs = np.asarray(Center_xs, dtype=float)
@@ -146,7 +143,7 @@ def Center_Line(Center_ys, Center_xs, Target_Y, Frame_Height):
     def supported(y):
         return (len(y) >= Min_Valid_Rows and np.ptp(y) >= Min_Fit_Span * scale
                 and y.min() <= Target_Y <= y.max())
-    # 修改：前视点必须被实际采样点包围，不允许向未知区域远距离外推。
+    # 前视点必须被实际采样点包围，不允许向未知区域远距离外推。
     if not supported(ys):
         return None
     relative_y = ys - Target_Y
@@ -185,7 +182,7 @@ def Draw_Line(Ima , Center_ys , Center_xs , Line , Middle_Line , Bottom_Y, Targe
 
     for i in range(len(Center_ys)):                  #有效的中心点画绿点
         cv2.circle(Ima_Show,(int(round(Center_xs[i])),Center_ys[i]),2,(0,255,0),-1)
-    # 修改：画前视行；红线只画局部拟合区域，黄点为实际控制目标。
+    # 画前视行；红线只画局部拟合区域，黄点为实际控制目标。
     cv2.line(Ima_Show, (0, Target_Y), (Ima.shape[1]-1, Target_Y), (0,255,255), 1)
     if Line is not None:
         A, B = Line
@@ -196,7 +193,7 @@ def Draw_Line(Ima , Center_ys , Center_xs , Line , Middle_Line , Bottom_Y, Targe
         cv2.circle(Ima_Show, (int(round(A*Target_Y+B)),Target_Y), 5, (0,255,255), -1)
     return Ima_Show
 #串口发送
-# 修改：沿用communication/serial_handler.py中的CarDo示范协议。
+# 沿用communication/serial_handler.py中的CarDo示范协议。
 # 10字节：42 01 0A [速度float32小端4字节] [PWM uint16小端2字节] [前9字节和低8位]
 # 不添加换行；实际CarDo固件必须支持此格式，当前未实现回执确认。
 def Build_CarDo_Frame(speed, direction):
@@ -242,9 +239,9 @@ Last_error = 0
 Lost_Frame = 0
 Previous_Center = None  # 修改：只缓存有效帧的底部中心，丢线立即清空
 
-# 修改：退出或异常时统一释放资源。
+#退出或异常时统一释放资源。
 try:
-    # 修改：在资源保护范围内打开串口，并先发送零速度。
+    #在资源保护范围内打开串口，并先发送零速度。
     ser = Open_UART()
     if not Send_Data_UART("S"):
         raise RuntimeError("UART初始停车帧发送失败")
@@ -252,37 +249,34 @@ try:
         #================================图像预处理================================
         ret , Ima = cap.read()
         if not ret or Ima is None:
-            # 修改：取帧失败退出，在finally中尝试发送零速度。
+            # 取帧失败退出，在finally中尝试发送零速度。
             print("摄像头取帧失败，停止巡线处理")
             break
         if not 0 <= ROI_UP < Ima.shape[0]:
-            # 修改：拒绝空ROI，避免后续图像处理报错。
+            # 拒绝空ROI，避免后续图像处理报错。
             print("ROI_UP超出画面高度，请调整参数")
             break
 
         gray = cv2.cvtColor(Ima,cv2.COLOR_BGR2GRAY)   #转换为灰度图
         Imagin = gray[ROI_UP:, :]  # 修改：裁到实际底部，与Bottom_Y一致
         _,Ima_Bin = cv2.threshold(Imagin , Threshold , 225 , cv2.THRESH_BINARY_INV)
-        # 修改：灰度大于Threshold变为0，其余变为225，选取暗色区域。
+        # 灰度大于Threshold变为0，其余变为225，选取暗色区域。
         Ima_Bin = cv2.morphologyEx(Ima_Bin , cv2.MORPH_OPEN,np.ones((3,3),np.uint8))
         #开运算，清除孤立的噪点
-        #==========================================================================
 
         Width = Ima_Bin.shape[1]    #数一下Ima_Bin的形状属性，0表示数行数，1表示数列数
         Hight = Ima_Bin.shape[0]
         Middle_Line = Width // 2    #获取图像中线
         Bottom_Y = Ima.shape[0] -1  #车头行
-        #========================================================================
 
         #========================================error计算========================
-        # 修改：前视行由ROI比例确定；上一有效帧帮助底部区段定位。
+        # 前视行由ROI比例确定；上一有效帧帮助底部区段定位。
         Target_Y = int(round(ROI_UP + Lookahead_Ratio * (Bottom_Y - ROI_UP)))
         Center_xs, Center_ys = Find_Center(Ima_Bin, Previous_Center)
         Line = Center_Line(Center_ys, Center_xs, Target_Y, Ima.shape[0])
         error, Angle = Computer_Error(Line, Middle_Line, Target_Y)
         Previous_Center = Center_xs[0] if error is not None else None
         Ima_Show = Draw_Line(Ima, Center_ys, Center_xs, Line, Middle_Line, Bottom_Y, Target_Y)
-        #==========================================================================
 
         #=========================================丢线处理+串口发送==================
         if error is None:       #如果这一帧丢线
@@ -303,7 +297,7 @@ try:
         # ----------------------------
 
 
-        # 修改：每帧发送一次；通信失败退出，不自动重连恢复运动。
+        # 每帧发送一次；通信失败退出，不自动重连恢复运动。
         if not Send_Data_UART(Send):
             break
 
@@ -316,7 +310,7 @@ try:
             break
 
 finally:
-    # 修改：q退出、断流或异常时尝试发送零速度；断线时无法保证到达。
+    # q退出、断流或异常时尝试发送零速度；断线时无法保证到达。
     # CarDo固件还需配置通信超时停车；上位机退出逻辑不能替代它。
     try:
         Send_Data_UART("S")
